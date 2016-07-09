@@ -3,16 +3,17 @@
 [SOCKS5 server](http://en.wikipedia.org/wiki/SOCKS) in Go.
 
 ## Feature
-
+* Daily use ready
 * Support No Auth
 * Support CONNECT cmd
 
 ## TODO
-- [ ] Unit Test
+- [ ] Unit tests
 - [ ] Password Auth
 - [ ] Support BIND cmd
 - [ ] Support UDP
-- [ ] Support Custome DNS
+- [ ] Support custome DNS
+- [ ] Benchmark
 
 ## Example
 
