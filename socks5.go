@@ -79,7 +79,7 @@ func (s *Server) Listen() (err error) {
 	}
 
 	for {
-		conn, err := ln.Accept()
+		conn, err := ln.AcceptTCP()
 		if err != nil {
 			continue
 		}
@@ -136,10 +136,12 @@ func (s *Server) handle(conn net.Conn) {
 
 // handShake is used for check version
 func (s *Server) handShake(conn net.Conn) (err error) {
-	b := s.pool.Get().([]byte)
-	defer s.pool.Put(b)
+	//b := s.pool.Get().([]byte)
+	//defer s.pool.Put(b)
 	// version 1, nmethod 1, methods 255
-	buf := b[:257]
+	//buf := b[:257]
+	buf := s.pool.Get().([]byte)
+	defer s.pool.Put(buf)
 
 	// read at least 2 bytes (version and auth method)
 	_, err = io.ReadAtLeast(conn, buf, 2)
@@ -168,10 +170,12 @@ func (s *Server) handShake(conn net.Conn) (err error) {
 
 // handle request, get address
 func (s *Server) request(conn net.Conn) (host string, err error) {
-	b := s.pool.Get().([]byte)
-	defer s.pool.Put(b)
+	//b := s.pool.Get().([]byte)
+	//defer s.pool.Put(b)
 	// version 1, cmd 1, rsv 1, atyp 1, addr max domain length is 253, port 2
-	buf := b[:258]
+	//buf := b[:258]
+	buf := s.pool.Get().([]byte)
+	defer s.pool.Put(buf)
 
 	// read at least fetch ipv4
 	_, err = io.ReadAtLeast(conn, buf, 10)
@@ -203,6 +207,10 @@ func (s *Server) request(conn net.Conn) (host string, err error) {
 		dstAddr = net.IP(buf[4 : 4+4]).String()
 		dstPort = int(binary.BigEndian.Uint16(buf[8:10]))
 	case atypIPV6:
+		_, err = io.ReadFull(conn, buf[10:22])
+		if err != nil {
+			return
+		}
 		// ipv6 start from 4, and ipv6 lenght is 16, port start from 20, total length is 22
 		dstAddr = net.IP(buf[4 : 4+16]).String()
 		dstPort = int(binary.BigEndian.Uint16(buf[20:22]))
@@ -239,6 +247,8 @@ func (s *Server) reply(conn net.Conn, rep byte) (err error) {
 	return
 }
 
+// connect transfer data between src and remote
+// TODO better implement?
 func (s *Server) connect(dst, src net.Conn) (err error) {
 	errChan := make(chan error, 1)
 	wg := sync.WaitGroup{}
