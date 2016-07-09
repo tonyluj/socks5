@@ -13,12 +13,10 @@ import (
 )
 
 var (
-	errAddrType      = errors.New("socks addr type not supported")
-	errVersion       = errors.New("socks version not supported")
-	errMethod        = errors.New("socks only support 1 method now")
-	errAuthExtraData = errors.New("socks authentication get extra data")
-	errReqExtraData  = errors.New("socks request get extra data")
-	errCmd           = errors.New("socks command not supported")
+	errAddrType = errors.New("unsupport address type")
+	errVersion  = errors.New("unsupport socks version")
+	errMethod   = errors.New("unsupport method")
+	errCmd      = errors.New("unsupport command")
 )
 
 const (
@@ -155,6 +153,14 @@ func (s *Server) handShake(conn net.Conn) (err error) {
 		return
 	}
 
+	// check method
+	switch buf[1] {
+	case methodNoAuth:
+	default:
+		//err = errMethod
+		//return
+	}
+
 	// only support NO AUTH method
 	_, err = conn.Write([]byte{version5, methodNoAuth})
 	return
@@ -179,7 +185,9 @@ func (s *Server) request(conn net.Conn) (host string, err error) {
 		return
 	}
 	// check cmd, support connect only
-	if buf[1] != cmdConnect {
+	switch buf[1] {
+	case cmdConnect:
+	default:
 		err = errCmd
 		return
 	}
@@ -207,6 +215,9 @@ func (s *Server) request(conn net.Conn) (host string, err error) {
 		}
 		dstAddr = string(buf[5 : 5+dstAddrLen])
 		dstPort = int(binary.BigEndian.Uint16(buf[5+dstAddrLen : 7+dstAddrLen]))
+	default:
+		err = errAddrType
+		return
 	}
 	host = net.JoinHostPort(dstAddr, strconv.Itoa(dstPort))
 
