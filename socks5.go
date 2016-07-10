@@ -131,7 +131,11 @@ func (s *Server) handle(conn net.Conn) {
 	}
 
 	// connect and transfer data
-	s.connect(rconn, conn)
+	err = s.connect(rconn, conn)
+	if err != nil {
+		s.logger.Println("copy", err)
+		return
+	}
 }
 
 // handShake is used for check version
@@ -150,7 +154,6 @@ func (s *Server) handShake(conn net.Conn) (err error) {
 	}
 	// check socks version
 	if buf[0] != version5 {
-		s.logger.Println("handShake error", err, buf[0])
 		err = errVersion
 		return
 	}
@@ -184,7 +187,6 @@ func (s *Server) request(conn net.Conn) (host string, err error) {
 	}
 	// check version
 	if buf[0] != version5 {
-		s.logger.Println("request error", err)
 		err = errVersion
 		return
 	}
@@ -232,6 +234,7 @@ func (s *Server) request(conn net.Conn) (host string, err error) {
 	return
 }
 
+// TODO
 func (s *Server) reply(conn net.Conn, rep byte) (err error) {
 	// version 1, rep 1, rsv 1, atyp 1, addr 4 or 16(ipv4 or ipv6), port 2
 	rb := make([]byte, 10)
@@ -250,7 +253,8 @@ func (s *Server) reply(conn net.Conn, rep byte) (err error) {
 // connect transfer data between src and remote
 // TODO better implement?
 func (s *Server) connect(dst, src net.Conn) (err error) {
-	errChan := make(chan error, 1)
+	//errChan := make(chan error, 1)
+	errChan := make(chan error, 2)
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	// read from src, write to remote
@@ -259,24 +263,14 @@ func (s *Server) connect(dst, src net.Conn) (err error) {
 			wg.Done()
 		}()
 
+		// get buffer from pool
 		b := s.pool.Get().([]byte)
-		for {
-			select {
-			case <-errChan:
-				dst.Write([]byte{0})
-				s.pool.Put(b)
-				return
-			default:
-				n, err := src.Read(b)
-				if n > 0 {
-					dst.Write(b[:n])
-				}
-
-				if err != nil {
-					errChan <- err
-					continue
-				}
-			}
+		_, err := s.copy(dst, src, b)
+		// send back buffer to pool
+		s.pool.Put(b)
+		if err != nil {
+			errChan <- err
+			return
 		}
 	}()
 
@@ -286,27 +280,69 @@ func (s *Server) connect(dst, src net.Conn) (err error) {
 			wg.Done()
 		}()
 
+		// get buffer from pool
 		b := s.pool.Get().([]byte)
-		for {
-			select {
-			case <-errChan:
-				src.Write([]byte{0})
-				s.pool.Put(b)
-				return
-			default:
-				n, err := dst.Read(b)
-				if n > 0 {
-					src.Write(b[:n])
-				}
-
-				if err != nil {
-					errChan <- err
-					continue
-				}
-			}
+		_, err := s.copy(src, dst, b)
+		// send back buffer to pool
+		s.pool.Put(b)
+		if err != nil {
+			errChan <- err
+			return
 		}
 	}()
 
 	wg.Wait()
+	close(errChan)
+	err = <-errChan
 	return
+}
+
+// copy data from src to dst
+func (s *Server) copy(dst, src net.Conn, buf []byte) (wriiten int64, err error) {
+	for {
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[:nr])
+			if nw > 0 {
+				wriiten += int64(nw)
+			}
+			if err != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er == io.EOF {
+			// if recv EOF from src, write EOF to remote too
+			// TODO
+			dst.Write([]byte{0})
+			break
+		}
+		if er != nil {
+			err = er
+			break
+		}
+	}
+	return
+
+	//for {
+	//select {
+	//case <-errChan:
+	//dst.Write([]byte{0})
+	//s.pool.Put(b)
+	//return
+	//default:
+	//n, err := src.Read(b)
+	//if n > 0 {
+	//dst.Write(b[:n])
+	//}
+	//if err != nil {
+	//errChan <- err
+	//continue
+	//}
+	//}
+	//}
 }
