@@ -327,22 +327,4 @@ func (s *Server) copy(dst, src net.Conn, buf []byte) (wriiten int64, err error) 
 		}
 	}
 	return
-
-	//for {
-	//select {
-	//case <-errChan:
-	//dst.Write([]byte{0})
-	//s.pool.Put(b)
-	//return
-	//default:
-	//n, err := src.Read(b)
-	//if n > 0 {
-	//dst.Write(b[:n])
-	//}
-	//if err != nil {
-	//errChan <- err
-	//continue
-	//}
-	//}
-	//}
 }
