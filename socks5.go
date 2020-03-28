@@ -51,11 +51,14 @@ const (
 	rsv = 0x00
 )
 
+type TimeoutDialer func(network, address string, timeout time.Duration) (net.Conn, error)
+
 type Server struct {
 	addr    *net.TCPAddr
 	pool    sync.Pool
 	timeout time.Duration
 	logger  *log.Logger
+	td      TimeoutDialer
 }
 
 func New(addr string, timeout time.Duration) (server *Server, err error) {
@@ -75,10 +78,18 @@ func New(addr string, timeout time.Duration) (server *Server, err error) {
 	return
 }
 
+func (s *Server) SetTimeoutDialer(td TimeoutDialer) {
+	s.td = td
+}
+
 func (s *Server) Listen() (err error) {
 	ln, err := net.ListenTCP("tcp", s.addr)
 	if err != nil {
 		return
+	}
+
+	if s.td == nil {
+		s.td = net.DialTimeout
 	}
 
 	var tempDelay time.Duration
@@ -129,7 +140,7 @@ func (s *Server) handle(conn net.Conn) {
 	}
 
 	// try to connect
-	rconn, err := net.DialTimeout("tcp", addr, s.timeout)
+	rconn, err := s.td("tcp", addr, s.timeout)
 	if err != nil {
 		s.logger.Println("dial", err)
 
@@ -285,7 +296,7 @@ func (s *Server) reply(conn net.Conn, rep byte) (err error) {
 }
 
 // connect transfer data between src and remote
-// 1. client open, remote open: if oocur any error, close both
+// 1. client open, remote open: if occur any error, close both
 // 2. client close, remote open: close remote
 // 3. client open, remote close: read remote data and write to client, then close client
 // 4. client close, remote close: rare condition
@@ -310,7 +321,7 @@ func (s *Server) connect(dst, src net.Conn) (err error) {
 }
 
 // copy data from src to dst
-func (s *Server) copy(dst, src net.Conn) (wriiten int64, err error) {
+func (s *Server) copy(dst, src net.Conn) (writen int64, err error) {
 	buf := s.pool.Get().([]byte)
 	defer s.pool.Put(buf)
 
@@ -320,7 +331,7 @@ func (s *Server) copy(dst, src net.Conn) (wriiten int64, err error) {
 		if nr > 0 {
 			nw, ew := dst.Write(buf[:nr])
 			if nw > 0 {
-				wriiten += int64(nw)
+				writen += int64(nw)
 			}
 			if ew != nil {
 				err = ew
