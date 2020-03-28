@@ -15,10 +15,10 @@ import (
 
 var (
 	errExtraData = errors.New("get extra data")
-	errAddrType  = errors.New("unsupport address type")
-	errVersion   = errors.New("unsupport socks version")
-	errMethod    = errors.New("unsupport method")
-	errCmd       = errors.New("unsupport command")
+	errAddrType  = errors.New("unsupported address type")
+	errVersion   = errors.New("unsupported socks version")
+	errMethod    = errors.New("unsupported method")
+	errCmd       = errors.New("unsupported command")
 )
 
 const (
